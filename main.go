@@ -87,7 +87,8 @@ func main() {
 	// pretty.Println(artist)
 
 	// source := "/Volumes/media/music/Ado/unravel"
-	source := "/Volumes/media/musicraw/Metallica/Metallica"
+	// source := "/Volumes/media/musicraw/Metallica/Metallica"
+	source := "/mnt/media/musicraw/Metallica/Metallica"
 
 	// mbid := "a03d4434-6b7c-4d56-adb7-f08d478fc09f"
 	mbid := "69a8ca83-a182-3375-a702-a30e216748c9"
@@ -162,10 +163,32 @@ func main() {
 
 	pretty.Println(unprocessedTracks)
 
+	// dir, err := os.MkdirTemp(".", "testing")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer os.RemoveAll(dir)
+
+	dir := "./testing"
+	err = os.MkdirAll(dir, 0766)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Dir: %v\n", dir)
+
 	for _, track := range unprocessedTracks {
 		_ = track
 		// TODO(patrik): Create Best Quality File (flac)
 		// TODO(patrik): Create Mobile Quality File (flac)
+
+		// TODO(patrik): Check extention
+		dstName := fmt.Sprintf("%v.best.flac", track.number)
+		utils.RunFFmpeg(true, "-i", track.filePath, path.Join(dir, dstName))
+
+		// ffmpeg -i input.flac -ab 320k -map_metadata 0 -id3v2_version 3 output.mp3
+		dstName = fmt.Sprintf("%v.mobile.mp3", track.number)
+		utils.RunFFmpeg(true, "-i", track.filePath, "-ab", "192k", path.Join(dir, dstName))
 	}
 
 	// if len(metadata.
