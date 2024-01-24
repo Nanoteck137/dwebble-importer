@@ -31,7 +31,7 @@ type ArtistData struct {
 
 func (server *Server) newReq(method, endpoint string, body io.Reader) (*http.Request, error) {
 	url := server.baseUrl + endpoint
-	return http.NewRequest("POST", url, body)
+	return http.NewRequest(method, url, body)
 }
 
 func (server *Server) CreateArtist(data ArtistData) (*types.ApiPostArtistData, error) {
@@ -231,3 +231,43 @@ func (server *Server) CreateTrack(data TrackData) (*types.ApiPostTrackData, erro
 
 	return &response.Data, nil
 }
+
+func (server *Server) GetArtists(name ...string) (*types.ApiGetArtistsData, error) {
+	// url := fmt.Sprintf("http://localhost:3000/api/v1/artists?name=%v", url.QueryEscape(name))
+	// req, err := http.NewRequest("GET", url, nil)
+
+	n := ""
+	if len(name) > 0 {
+		n = name[0]
+	}
+
+	req, err := server.newReq("GET", fmt.Sprintf("/artists?name=%v", n), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode != 200 {
+		return nil, errors.New("Request error: " + string(data))
+	}
+
+	var response types.ApiResponse[types.ApiGetArtistsData]
+	err = json.Unmarshal(data, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response.Data, nil
+
+}
+
