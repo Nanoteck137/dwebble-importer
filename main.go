@@ -17,6 +17,7 @@ import (
 
 	"github.com/kr/pretty"
 	"github.com/nanoteck137/dwebble-importer/musicbrainz"
+	"github.com/nanoteck137/dwebble-importer/server"
 	"github.com/nanoteck137/dwebble-importer/utils"
 	"github.com/nanoteck137/dwebble/types"
 )
@@ -200,7 +201,7 @@ func CreateTrack(track Track) (types.ApiPostTrackData, error) {
 		h.Set("Content-Disposition", dis)
 		h.Set("Content-Type", contentType)
 
-		writer, err :=  form.CreatePart(h)
+		writer, err := form.CreatePart(h)
 		if err != nil {
 			return err
 		}
@@ -274,6 +275,78 @@ type Config struct {
 }
 
 func main() {
+	{
+		api := server.New("http://localhost:3000/api/v1")
+
+		artist, err := api.CreateArtist(server.ArtistData{
+			Name:    "Testing Artist",
+			Picture: nil,
+		})
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pretty.Println(artist)
+
+		album, err := api.CreateAlbum(server.AlbumData{
+			Name:     "Test Album",
+			ArtistId: artist.Id,
+			CoverArt: nil,
+		})
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pretty.Println(album)
+
+		bestQualityFile, err := os.Open("./testing/1.flac")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		mobileQualityFile, err := os.Open("./testing/1.mp3")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		coverArt, err := os.Open("./testing/test.png")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		track, err := api.CreateTrack(server.TrackData{
+			Name:              "Test Track",
+			Number:            1,
+			AlbumId:           album.Id,
+			ArtistId:          artist.Id,
+			BestQualityFile:   server.File{
+				ContentType: "audio/flac",
+				Name:        "1.flac",
+				Content:     bestQualityFile,
+			},
+			MobileQualityFile: server.File{
+				ContentType: "audio/mpeg",
+				Name:        "1.mp3",
+				Content:     mobileQualityFile,
+			},
+			CoverArt:          server.File{
+				ContentType: "image/png",
+				Name:        "coverart.png",
+				Content:     coverArt,
+			},
+		})
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pretty.Println(track)
+	}
+
+	return
+
 	// artist, err := CreateArtist("test")
 	// if err != nil {
 	// 	log.Fatal(err)
@@ -282,8 +355,8 @@ func main() {
 	// pretty.Println(artist)
 
 	// source := "/Volumes/media/music/Ado/unravel"
-	source := "/Volumes/media/musicraw/Metallica/Metallica"
-	// source := "/mnt/media/musicraw/Metallica/Metallica"
+	// source := "/Volumes/media/musicraw/Metallica/Metallica"
+	source := "/mnt/media/musicraw/Metallica/Metallica"
 
 	// mbid := "a03d4434-6b7c-4d56-adb7-f08d478fc09f"
 	mbid := "69a8ca83-a182-3375-a702-a30e216748c9"
