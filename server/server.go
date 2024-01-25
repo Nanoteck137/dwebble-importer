@@ -271,3 +271,39 @@ func (server *Server) GetArtists(name ...string) (*types.ApiGetArtistsData, erro
 
 }
 
+func (server *Server) GetArtistAlbums(artistId string, name ...string) (*types.ApiGetArtistAlbumsByIdData, error) {
+	n := ""
+	if len(name) > 0 {
+		n = name[0]
+	}
+
+	req, err := server.newReq("GET", fmt.Sprintf("/artists/%v/albums?name=%v", artistId, n), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode != 200 {
+		return nil, errors.New("Request error: " + string(data))
+	}
+
+	var response types.ApiResponse[types.ApiGetArtistAlbumsByIdData]
+	err = json.Unmarshal(data, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return &response.Data, nil
+
+}
+

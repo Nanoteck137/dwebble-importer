@@ -63,7 +63,10 @@ type Config struct {
 func main() {
 	api := server.New("http://localhost:3000/api/v1")
 
-	p := "/Volumes/media/musicraw/Metallica/Metallica/def.toml"
+	// d := "/Volumes/media/musicraw/Metallica/Metallica"
+	d := "/Volumes/media/music/Ado/unravel"
+
+	p := path.Join(d, "album.toml")
 	data, err := os.ReadFile(p)
 	if err != nil {
 		log.Fatal(err)
@@ -113,17 +116,34 @@ func main() {
 		}
 	}
 
-	album, err := api.CreateAlbum(server.AlbumData{
-		Name:     config.Name,
-		ArtistId: allArtists[config.Artist],
-		CoverArt: nil,
-	})
-
+	artistId := allArtists[config.Artist]
+	albums, err := api.GetArtistAlbums(artistId, config.Name)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	pretty.Println(album)
+	albumId := ""
+
+	if len(albums.Albums) == 0 {
+		album, err := api.CreateAlbum(server.AlbumData{
+			Name:     config.Name,
+			ArtistId: artistId,
+			CoverArt: nil,
+		})
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pretty.Println(album)
+		albumId = album.Id
+	} else {
+		if len(albums.Albums) > 1 {
+			log.Fatalf("Server returned more then one album for '%v' - '%v'", config.Artist, config.Name)
+		}
+
+		albumId = albums.Albums[0].Id
+	}
 
 	var unprocessedTracks []UnprocessedTrack
 
@@ -133,13 +153,12 @@ func main() {
 			artist = track.Artist
 		}
 
-		dir := "/Volumes/media/musicraw/Metallica/Metallica"
-		trackFile := path.Join(dir, track.Filename)
+		trackFile := path.Join(d, track.Filename)
 
 		unprocessedTracks = append(unprocessedTracks, UnprocessedTrack{
 			Name:      track.Name,
 			Number:    track.Num,
-			AlbumId:   album.Id,
+			AlbumId:   albumId,
 			ArtistId:  allArtists[artist],
 			TrackFile: trackFile,
 		})
@@ -161,7 +180,7 @@ func main() {
 		// TODO(patrik): Check extention
 		dstName := fmt.Sprintf("%v.best.flac", track.Number)
 		bestQualityFilePath := path.Join(dir, dstName)
-		utils.RunFFmpeg(true, "-i", track.TrackFile, bestQualityFilePath)
+		utils.RunFFmpeg(true, "-i", track.TrackFile, "-map_metadata", "-1", "-map", "0", "-map", "-0:v", "-c:a", "copy", bestQualityFilePath)
 
 		// ffmpeg -i input.flac -ab 320k -map_metadata 0 -id3v2_version 3 output.mp3
 		dstName = fmt.Sprintf("%v.mobile.mp3", track.Number)
@@ -227,7 +246,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		api.CreateTrack(server.TrackData{
+		_, err = api.CreateTrack(server.TrackData{
 			Name:              track.Name,
 			Number:            track.Number,
 			AlbumId:           track.AlbumId,
@@ -236,6 +255,10 @@ func main() {
 			MobileQualityFile: mobileQualityFile,
 			CoverArt:          coverArt,
 		})
+
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
 	pretty.Println(processedTracks)
