@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path"
+	"sort"
+	"strings"
 
 	"github.com/kr/pretty"
 	"github.com/nanoteck137/dwebble-importer/server"
 	"github.com/nanoteck137/dwebble-importer/utils"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/spf13/cobra"
 )
 
 type UnprocessedTrack struct {
@@ -60,7 +65,138 @@ type Config struct {
 	Tracks []ConfigTrack `toml:"tracks"`
 }
 
+var rootCmd = &cobra.Command{
+	Use:     "dwebble-import",
+	Version: "v0.0.1",
+	CompletionOptions: cobra.CompletionOptions{
+		DisableDefaultCmd: true,
+	},
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("Run")
+	},
+}
+
+var createConfigCmd = &cobra.Command{
+	Use:   "create-config",
+	Short: "Create new album config",
+	Args:  cobra.RangeArgs(0, 1),
+	Run: func(cmd *cobra.Command, args []string) {
+		dir := "./"
+		if len(args) > 0 {
+			dir = args[0]
+		}
+		runCreateConfig(dir)
+	},
+}
+
+var importCmd = &cobra.Command{
+	Use:   "import",
+	Short: "Import album to dwebble server",
+	Run: func(cmd *cobra.Command, args []string) {
+		serverAddr, _ := cmd.Flags().GetString("serverAddr")
+		fmt.Printf("Import %v\n", serverAddr)
+	},
+}
+
+func init() {
+	importCmd.PersistentFlags().StringP("serverAddr", "s", "", "")
+
+	rootCmd.AddCommand(createConfigCmd)
+	rootCmd.AddCommand(importCmd)
+}
+
+func runCreateConfig(dir string) {
+	fmt.Printf("Dir: %v\n", dir)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var fileResults []utils.FileResult
+
+	for _, entry := range entries {
+		p := path.Join(dir, entry.Name())
+
+		ext := path.Ext(p)[1:]
+		if utils.IsValidTrackExt(ext) {
+			res, err := utils.CheckFile(p)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			fileResults = append(fileResults, res)
+		}
+	}
+
+	albumArtistName := ""
+	albumName := ""
+	var tracks []ConfigTrack
+
+	for _, file := range fileResults {
+		if file.Probe.Track != -1 && file.Probe.Track != file.Number {
+			log.Fatal("Track number not matching")
+		}
+
+		if file.Probe.AlbumArtist != "" {
+			albumArtistName = file.Probe.AlbumArtist
+		}
+
+		if file.Probe.Album != "" {
+			albumName = file.Probe.Album
+		}
+
+		tracks = append(tracks, ConfigTrack{
+			Num:      file.Number,
+			Name:     file.Probe.Title,
+			Filename: path.Base(file.Path),
+			Artist:   file.Probe.Artist,
+		})
+	}
+
+	sort.SliceStable(tracks, func(i, j int) bool {
+		return tracks[i].Num < tracks[j].Num
+	})
+
+	config := Config{
+		Typ:    "",
+		Name:   albumName,
+		Artist: albumArtistName,
+		Tracks: tracks,
+	}
+
+	data, err := toml.Marshal(config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Print(string(data))
+
+	configPath := path.Join(dir, "album.toml")
+	if _, err := os.Stat(configPath); !errors.Is(err, os.ErrNotExist) {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("Config already exists overwrite (y/n): ")
+		text, _ := reader.ReadString('\n')
+		text = strings.TrimSpace(text)
+
+		switch text {
+		case "y", "yes":
+			fmt.Printf("Writing config\n")
+			os.WriteFile(configPath, data, 0644)
+		default:
+			fmt.Printf("Not writing config\n")
+		}
+	} else {
+		os.WriteFile(configPath, data, 0644)
+	}
+}
+
 func main() {
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
+
+	return
 	api := server.New("http://localhost:3000/api/v1")
 
 	// d := "/Volumes/media/musicraw/Metallica/Metallica"
